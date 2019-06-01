@@ -1,0 +1,82 @@
+function [Tour, Length] = tsp_lkh(W, options)
+
+% compute_traveling_salesman - wrapper for the linkern programm solving TSP
+%
+%   I = wrapper_linkern(W, options);
+%
+%   W is the matrix of weights (should be intergers).
+%   I is the ordering solution of the traveling salesman problem.
+%
+%   linkern program can be downloaded from 
+%   http://www.tsp.gatech.edu/concorde/downloads/downloads.htm
+%   Linkern is an implementation of the Chained-Lin-Kernighan heuristic for
+%   the TSP. It solves *approximatly* the TSP in fast time.
+%
+%   Copyright (c) 2006 Gabriel Peyré
+
+if nargin==0, W = 10*rand(50,2), end
+
+options.null = 0;
+if isfield(options, 'nbr_runs')
+    nbr_runs = options.nbr_runs;
+else
+    nbr_runs = 1;
+end
+if isfield(options, 'kick')
+    kick = options.kick;
+else
+    kick = 3;
+end
+
+tmpfile = 'tmp.tsp';
+
+fid = fopen(tmpfile,'W');
+if fid<0
+    error('Unable to open tmp file.');
+    return;
+end
+
+n = size(W,1);
+
+fprintf(fid, ['NAME : tmp\n' ...
+              'TYPE : TSP\n' ...
+              'DIMENSION : ' num2str(n) '\n' ...
+              'EDGE_WEIGHT_TYPE : EUC_2D\n' ...
+              'NODE_COORD_SECTION\n'] );
+fclose(fid);
+W=[[1:n]', W];
+dlmwrite(tmpfile, W, '-append', 'delimiter', ' ')
+
+ fid = fopen(tmpfile,'a');
+ fprintf(fid, 'EOF\n');
+ fclose(fid);
+
+% call lkh executable
+%tmp.par always contain tmp.tsp
+%!lkh.exe -o tmp.res tmp.tsp > tmp.out
+scriptName = mfilename('fullpath');
+[currentpath, filename, fileextension]= fileparts(scriptName);
+lkh_exe=fullfile(currentpath, 'lkh.exe');
+if ~exist(fullfile(currentpath,'tmp.par'), 'file')
+    msgbox('Please create the file tmp.par containing PROBLEM_FILE = tmp.tsp and TOUR_FILE = tmp.tour',...
+        'Missing parameters file', 'warn');
+    return
+end
+try
+system([lkh_exe ' tmp.par > tmp.out']);
+%!E:\0recherche\_robotic\Code\lkh.exe tmp.par > tmp.out &
+% system(['linkern -o tmp.res -r ' num2str(nbr_runs) ' -K ' num2str(kick) ' tmp.tsp > tmp.out']);
+catch
+    
+end
+% retrieve result
+tsp_sol_cell = importdata('tmp.tour', '');
+tsp_sol = tsp_sol_cell.data;
+tsp_sol(end) = [];
+Tour=tsp_sol;
+tour_length=tsp_sol_cell.textdata{2}(1,11:end);
+eval(tour_length);
+%delete unecessary file
+delete('tmp.tour');
+%delete(tmpfile);
+delete('tmp.out');

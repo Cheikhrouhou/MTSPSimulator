@@ -1,0 +1,137 @@
+%Date: wed 16-02-2016
+%Function of the RTMA approach
+
+%TODo: cost_rtma % final position not depot. and 2) in a market based way
+%cost_rtma updated at each allocation
+
+
+function [rte, brk, tourcost, approachCosts]=momdmtsp_RTMA(Targets, depots, compMat, show_prog)
+
+
+%compute cost for each robot
+%
+global  tourcost tour   param;
+
+approachCosts=[];
+%%%%%%%% screen scize%%%%%%%%%%%%%%%%%
+scnsize = get(0,'ScreenSize');
+edge=30;
+pos1 = [scnsize(4)-edge, scnsize(3)/3-3*edge,...
+        scnsize(3)/2 - 3*edge, scnsize(4)/2 - 3*edge];
+pos2 = [scnsize(4)-edge, edge*2,...
+        pos1(3),  pos1(4)];
+
+% 
+% scrsz=scrsz-[0  0   160 160]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+for k = nargin:3
+    switch k
+        case 0
+            global  Targets ;
+            Targets = 100*rand(10,2);
+        case 1
+            global  Robots;
+            nbrRobots=3;
+            depots = 100*rand(nbrRobots,2); 
+            Robots=depots';
+        case 2
+%             compMat=[1  1/2 3
+%                      2  1   2
+%                      1/3 1/2 1];
+             compMat=[1  1/2   1/3; 
+                      2   1    1/2; 
+                      3   2    1]
+        case 3
+            show_prog=1;
+        otherwise
+    end
+end
+
+nbrTargets=size(Targets, 1)
+nbrRobots=size(depots,1)
+if ~(nbrTargets && nbrRobots)
+    msgbox('Nbre of Targets and Nbre of Robots must not be zero','Change configuration','Warning');
+    return;
+end
+
+%initialization
+clr=hsv(nbrRobots);
+%alpha1=1;
+%[wd wmt wt we wv]=read_weight()
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Computing weight based on AHP %%%%%%%%%%
+
+ w=ahp(compMat);
+ %weight=[w' zeros(1,5-size(w))]
+weight=[w(1),w(2), 0, 0, w(3)]
+%unassigned targets firstly = all target
+%weight=[wd wmt wt we wv]
+param=[nbrTargets nbrRobots weight];
+[wd wmt wt we wv]=deal(weight(1),weight(2), weight(3), weight(4), weight(5));
+
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%%%%%%%%%%%%%%%%%%%%%   BEGIN RTMA ALLOCATION    %%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+ if(show_prog)
+     %create_newfigure();
+     fig_name=sprintf('RTMA allocation %s', num2str(param));%-%s, cputime
+     
+     figure('Name',fig_name,'Numbertitle','off','menubar', 'none', 'position', pos1);
+     
+     plot (Targets(:,1),Targets(:,2),'ro')
+     hold on
+     plot (depots(:,1),depots(:,2), 'd')
+
+ end
+ cost_table=[];
+ for ri=1:nbrRobots
+     cost_table=horzcat(cost_table, cost_rtma(depots(ri,:), Targets))
+ end
+
+ [C, robot]=min(cost_table, [], 2)
+ 
+ for ri=1:nbrRobots
+     bidtour{ri}=Targets(robot==ri,:)
+     bidtour{ri}=[bidtour{ri}; depots(ri,:)]
+     [bidindex{ri}, bidtourcost(ri)]=tsp_solver( bidtour{ri})
+     bidtour{ri}=bidtour{ri}(bidindex{ri},:)  
+ end
+ 
+ %compute globalcost
+ bidglobalcost=wd*sum(bidtourcost)+wmt*max(bidtourcost)+wv*std(bidtourcost,1)
+ %if bidglobalcost<globalCost
+      for ri=1:nbrRobots
+         tour{ri}=bidtour{ri}; 
+         if show_prog
+             try                 
+                 %delete(tr(ri))                 
+                 tr(ri)=plot([tour{ri}(:,1);tour{ri}(1,1)],[tour{ri}(:,2); tour{ri}(1,2)], 'Color',clr(ri,:))
+             catch 
+                 disp('Plotting problem');
+             end  
+         end
+         
+      end
+      globalCost=bidglobalcost
+      tourcost=bidtourcost
+      if show_prog
+           title(sprintf('TTD = %1.3f \t MaxTour = %1.3f \t \n GlobalCost:%1.3f ',...
+              sum(tourcost),max(tourcost), globalCost));
+      end
+      
+ %end
+ 
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %    RTMA allocation END and begin of
+ %Improvement based on worst targets bidding for RTMA allocation
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ approachCosts=[approachCosts, globalCost]
+ [wasImproved, tour, tourcost, globalCost]=improvement(Targets, depots, bidtour , bidtourcost, weight, show_prog, 'RTMA allocation')
+ approachCosts=[approachCosts, globalCost]
+  
+             
+%%% Return variables rtes%%%
+[rte, brk]=return_rte(tour, Targets)
+
+end

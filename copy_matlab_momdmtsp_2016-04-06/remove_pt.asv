@@ -1,0 +1,7 @@
+function result=remove_pt(pt, vector)
+
+    [mb,loc]=ismember(pt,vector, 'rows');
+    if sum(loc)>0, vector(loc,:)=[];  end
+    result=vector;
+    
+end
