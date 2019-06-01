@@ -1,0 +1,7 @@
+function weight=ahp(compMat)
+
+[V,D] = eig(compMat);
+vect=V(:,1);
+
+weight=vect/sum(vect)
+end
